@@ -3,13 +3,11 @@ import shutil
 import asyncio
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Form
 from fastapi.responses import FileResponse
-import whisper
 from deep_translator import GoogleTranslator
 import edge_tts
 
 app = FastAPI()
 
-model = whisper.load_model("tiny")
 UPLOAD_DIR = "./temp"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
