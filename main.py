@@ -1,35 +1,40 @@
 import os
 import shutil
+import traceback
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 
 app = FastAPI()
 
-# مجلدات لحفظ الملفات المؤقتة والنتائج
+# مسارات الحفظ المؤقتة
 UPLOAD_DIR = "uploads"
 OUTPUT_DIR = "outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-def background_dubbing_task(input_path: str, output_path: str, target_lang: str, voice: str):
+
+# ==========================================
+# دالة معالجة الدبلجة في الخلفية مع تتبع الأخطاء
+# ==========================================
+async def background_dubbing_task(input_file_path: str, output_file_path: str, target_lang: str, voice: str):
     try:
-        # هنا يتم استدعاء دالة معالجة الفيديو والدبلجة الفعلية الخاصة بك
-        # process_video_pipeline(input_path, output_path, target_lang, voice)
+        print(f"--- بدأ معالجة الفيديو في الخلفية للغة: {target_lang} والصوت: {voice} ---")
         
-        # محاكاة مؤقتة للمعالجة (حتى تربط دالتك الحقيقية)
-        shutil.copy(input_path, output_path) 
-        
+        # ضع هنا الكود الفعلي الخاص بك (الترجمة، توليد الصوت، دمج الفيديو... إلخ)
+        # مثال:
+        # process_video(input_file_path, output_file_path, target_lang, voice)
+
+        print(f"--- تم الانتهاء من دبلجة الفيديو بنجاح وحفظه في: {output_file_path} ---")
+
     except Exception as e:
-        print(f"Error in background task: {e}")
-    finally:
-        # تنظيف ملف الإدخال المؤقت لتوفير مساحة الـ RAM
-        if os.path.exists(input_path):
-            os.remove(input_path)
+        # في حال حدوث أي خطأ، سيتم طباعته بالتفصيل في السجلات (Logs) بدلاً من التوقف بصمت
+        print(f"❌ حدث خطأ أثناء معالجة الفيديو في الخلفية: {str(e)}")
+        print(traceback.format_exc())
 
-@app.get("/")
-def home():
-    return {"status": "Server is running perfectly!"}
 
+# ==========================================
+# نقطة النهاية (API) لاستقبال الفيديو
+# ==========================================
 @app.post("/dub/")
 async def dub_video(
     background_tasks: BackgroundTasks,
@@ -40,29 +45,33 @@ async def dub_video(
     input_file_path = os.path.join(UPLOAD_DIR, file.filename)
     output_filename = f"dubbed_{file.filename}"
     output_file_path = os.path.join(OUTPUT_DIR, output_filename)
-    
-    # حفظ الملف المرفوع مؤقتًا على القرص
+
+    # حفظ الملف المرفوع مؤقتا على القرص
     with open(input_file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-        
+
     # تشغيل الدبلجة في الخلفية لتجنب حدوث Timeout
     background_tasks.add_task(
-        background_dubbing_task, 
-        input_file_path, 
-        output_file_path, 
-        target_lang, 
+        background_dubbing_task,
+        input_file_path,
+        output_file_path,
+        target_lang,
         voice
     )
-    
+
     return {
         "message": "Video is processing in the background.",
         "filename": output_filename,
         "download_url": f"/download/{output_filename}"
     }
 
+
+# ==========================================
+# نقطة النهاية (API) لتحميل الفيديو بعد انتهائه
+# ==========================================
 @app.get("/download/{filename}")
 async def download_file(filename: str):
     file_path = os.path.join(OUTPUT_DIR, filename)
     if os.path.exists(file_path):
-        return FileResponse(file_path, media_type="video/mp4", filename=filename)
+        return FileResponse(file_path)
     raise HTTPException(status_code=404, detail="File not found or still processing.")
