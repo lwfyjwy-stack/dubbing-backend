@@ -3,6 +3,7 @@ import shutil
 import traceback
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
+from gtts import gTTS
 
 app = FastAPI()
 
@@ -14,19 +15,31 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 # ==========================================
-# دالة معالجة الدبلجة في الخلفية (آمنة وخفيفة)
+# دالة معالجة الدبلجة وتوليد الصوت في الخلفية
 # ==========================================
 async def background_dubbing_task(input_file_path: str, output_file_path: str, target_lang: str, voice: str):
     try:
-        print(f"--- بدأ معالجة الفيديو في الخلفية للغة: {target_lang} والصوت: {voice} ---")
+        print(f"--- بدأ معالجة الفيديو والدبلجة للغة: {target_lang} والصوت: {voice} ---")
         
-        # حالياً نقوم بنسخ الملف المرفوع كنموذج تجريبي للتأكد من نجاح المسار
+        # 1. سنقوم بتوليد صوت تجريبي (كمثال: تحويل نص إلى صوت باللغة العربية)
+        # يمكنك لاحقاً استبدال هذا النص بالنص المترجم المستخرج من الفيديو
+        sample_text = "هذه تجربة دبلجة صوتية تلقائية للسيرفر."
+        
+        audio_output_path = os.path.join(OUTPUT_DIR, "temp_voice.mp3")
+        
+        # توليد الصوت باستخدام gTTS (اللغة العربية ar)
+        tts = gTTS(text=sample_text, lang='ar', slow=False)
+        tts.save(audio_output_path)
+        print(f"--- تم توليد الصوت بنجاح في: {audio_output_path} ---")
+
+        # حالياً نقوم بنسخ الفيديو الأصلي مع حفظ مسار الصوت الناتج جنباً إلى جنب
+        # (في الخطوات القادمة سنقوم بدمج ملف الصوت مع الفيديو بـ ffmpeg)
         shutil.copy(input_file_path, output_file_path)
 
-        print(f"--- تم الانتهاء من المعالجة بنجاح وحفظه في: {output_file_path} ---")
+        print(f"--- انتهت عملية الدبلجة وحفظ الفيديو في: {output_file_path} ---")
 
     except Exception as e:
-        print(f"❌ حدث خطأ أثناء معالجة الفيديو في الخلفية: {str(e)}")
+        print(f"❌ حدث خطأ أثناء الدبلجة في الخلفية: {str(e)}")
         print(traceback.format_exc())
 
 
@@ -58,7 +71,7 @@ async def dub_video(
     )
 
     return {
-        "message": "Video is processing in the background safely.",
+        "message": "Dubbing process started in the background successfully.",
         "filename": output_filename,
         "download_url": f"/download/{output_filename}"
     }
