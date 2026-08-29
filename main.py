@@ -1,88 +1,66 @@
 import os
-import shutil
-import traceback
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
+import subprocess
+from fastapi import FastAPI, BackgroundTasks, UploadFile, File
 from fastapi.responses import FileResponse
 from gtts import gTTS
 
 app = FastAPI()
 
-# مسارات الحفظ المؤقتة
 UPLOAD_DIR = "uploads"
 OUTPUT_DIR = "outputs"
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-
-# ==========================================
-# دالة معالجة الدبلجة وتوليد الصوت في الخلفية
-# ==========================================
-async def background_dubbing_task(input_file_path: str, output_file_path: str, target_lang: str, voice: str):
+def process_video_task(input_video_path: str, output_video_path: str):
     try:
-        print(f"--- بدأ معالجة الفيديو والدبلجة للغة: {target_lang} والصوت: {voice} ---")
+        print("--- بدأ عملية توليد الصوت واستبدال الصوت الأصلي بالكامل ---")
         
-        # 1. سنقوم بتوليد صوت تجريبي (كمثال: تحويل نص إلى صوت باللغة العربية)
-        # يمكنك لاحقاً استبدال هذا النص بالنص المترجم المستخرج من الفيديو
-        sample_text = "هذه تجربة دبلجة صوتية تلقائية للسيرفر."
-        
-        audio_output_path = os.path.join(OUTPUT_DIR, "temp_voice.mp3")
-        
-        # توليد الصوت باستخدام gTTS (اللغة العربية ar)
-        tts = gTTS(text=sample_text, lang='ar', slow=False)
-        tts.save(audio_output_path)
-        print(f"--- تم توليد الصوت بنجاح في: {audio_output_path} ---")
+        # 1. توليد ملف الصوت العربي
+        tts = gTTS(text="مرحباً بك، هذه هي الدبلجة العربية الجديدة.", lang="ar")
+        voice_path = os.path.join(OUTPUT_DIR, "temp_voice.mp3")
+        tts.save(voice_path)
+        print(f"--- تم توليد الصوت بنجاح في: {voice_path} ---")
 
-        # حالياً نقوم بنسخ الفيديو الأصلي مع حفظ مسار الصوت الناتج جنباً إلى جنب
-        # (في الخطوات القادمة سنقوم بدمج ملف الصوت مع الفيديو بـ ffmpeg)
-        shutil.copy(input_file_path, output_file_path)
-
-        print(f"--- انتهت عملية الدبلجة وحفظ الفيديو في: {output_file_path} ---")
+        # 2. استبدال صوت الفيديو الأصلي بالصوت الجديد فقط (حذف الصوت القديم كلياً)
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", input_video_path,
+            "-i", voice_path,
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            "-shortest",
+            output_video_path
+        ]
+        
+        subprocess.run(cmd, check=True)
+        print(f"--- انتهت عملية الدبلجة واستبدال الصوت بنجاح في: {output_video_path} ---")
 
     except Exception as e:
-        print(f"❌ حدث خطأ أثناء الدبلجة في الخلفية: {str(e)}")
-        print(traceback.format_exc())
+        print(f"--- خطأ أثناء معالجة الفيديو: {e} ---")
 
-
-# ==========================================
-# نقطة النهاية (API) لاستقبال الفيديو
-# ==========================================
 @app.post("/dub/")
-async def dub_video(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    target_lang: str = Form(...),
-    voice: str = Form(...)
-):
-    input_file_path = os.path.join(UPLOAD_DIR, file.filename)
+async def dub_video(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    input_path = os.path.join(UPLOAD_DIR, file.filename)
     output_filename = f"dubbed_{file.filename}"
-    output_file_path = os.path.join(OUTPUT_DIR, output_filename)
+    output_path = os.path.join(OUTPUT_DIR, output_filename)
 
-    # حفظ الملف المرفوع مؤقتا على القرص
-    with open(input_file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    with open(input_path, "wb") as buffer:
+        content = await file.read()
+        buffer.write(content)
 
-    # تشغيل المهمة في الخلفية
-    background_tasks.add_task(
-        background_dubbing_task,
-        input_file_path,
-        output_file_path,
-        target_lang,
-        voice
-    )
+    background_tasks.add_task(process_video_task, input_path, output_path)
 
     return {
-        "message": "Dubbing process started in the background successfully.",
-        "filename": output_filename,
+        "message": "تم استلام الفيديو وبدء عملية الدبلجة الفردية في الخلفية!",
         "download_url": f"/download/{output_filename}"
     }
 
-
-# ==========================================
-# نقطة النهاية (API) لتحميل الفيديو
-# ==========================================
 @app.get("/download/{filename}")
 async def download_file(filename: str):
     file_path = os.path.join(OUTPUT_DIR, filename)
     if os.path.exists(file_path):
-        return FileResponse(file_path)
-    raise HTTPException(status_code=404, detail="File not found or still processing.")
+        return FileResponse(file_path, media_type="video/mp4", filename=filename)
+    return {"error": "الملف غير موجود أو لم تكتمل معالجته بعد"}
