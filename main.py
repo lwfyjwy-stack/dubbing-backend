@@ -3,6 +3,7 @@ import shutil
 import traceback
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
+from moviepy.editor import VideoFileClip
 
 app = FastAPI()
 
@@ -14,20 +15,30 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 # ==========================================
-# دالة معالجة الدبلجة في الخلفية مع تتبع الأخطاء
+# دالة معالجة الدبلجة الفعليّة في الخلفية
 # ==========================================
 async def background_dubbing_task(input_file_path: str, output_file_path: str, target_lang: str, voice: str):
     try:
         print(f"--- بدأ معالجة الفيديو في الخلفية للغة: {target_lang} والصوت: {voice} ---")
         
-        # ضع هنا الكود الفعلي الخاص بك (الترجمة، توليد الصوت، دمج الفيديو... إلخ)
-        # مثال:
-        # process_video(input_file_path, output_file_path, target_lang, voice)
+        # مثال عملي باستخدام MoviePy لفتح الفيديو ومعالجته
+        # (يمكنك استبدال هذا الجزء بكود الذكاء الاصطناعي الخاص بالترجمة وتوليد الصوت)
+        clip = VideoFileClip(input_file_path)
+        
+        # هنا يتم تطبيق عمليات الدبلجة (توليد الصوت الجديد ودمجه مع الفيديو)
+        # للتجربة حالياً، سنقوم بحفظ نسخة معالجة أو كتم الصوت/تعديله
+        final_clip = clip # ضع كود دمج الصوت المترجم هنا
+        
+        # حفظ الفيديو الناتج في المسار النهائي المطلوب
+        final_clip.write_videofile(output_file_path, codec="libx264", audio_codec="aac")
+        
+        # إغلاق الملفات لتحرير الذاكرة
+        clip.close()
 
         print(f"--- تم الانتهاء من دبلجة الفيديو بنجاح وحفظه في: {output_file_path} ---")
 
     except Exception as e:
-        # في حال حدوث أي خطأ، سيتم طباعته بالتفصيل في السجلات (Logs) بدلاً من التوقف بصمت
+        # تسجيل أي خطأ مفصل في الـ Logs بدلاً من التوقف بصمت
         print(f"❌ حدث خطأ أثناء معالجة الفيديو في الخلفية: {str(e)}")
         print(traceback.format_exc())
 
