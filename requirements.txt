@@ -1,6 +1,4 @@
 fastapi
 uvicorn
 python-multipart
-git+https://github.com/openai/whisper.git
-deep-translator
-edge-tts
+gTTS
