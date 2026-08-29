@@ -3,7 +3,6 @@ import shutil
 import traceback
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
-from moviepy.editor import VideoFileClip
 
 app = FastAPI()
 
@@ -15,30 +14,18 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 # ==========================================
-# دالة معالجة الدبلجة الفعليّة في الخلفية
+# دالة معالجة الدبلجة في الخلفية (آمنة وخفيفة)
 # ==========================================
 async def background_dubbing_task(input_file_path: str, output_file_path: str, target_lang: str, voice: str):
     try:
         print(f"--- بدأ معالجة الفيديو في الخلفية للغة: {target_lang} والصوت: {voice} ---")
         
-        # مثال عملي باستخدام MoviePy لفتح الفيديو ومعالجته
-        # (يمكنك استبدال هذا الجزء بكود الذكاء الاصطناعي الخاص بالترجمة وتوليد الصوت)
-        clip = VideoFileClip(input_file_path)
-        
-        # هنا يتم تطبيق عمليات الدبلجة (توليد الصوت الجديد ودمجه مع الفيديو)
-        # للتجربة حالياً، سنقوم بحفظ نسخة معالجة أو كتم الصوت/تعديله
-        final_clip = clip # ضع كود دمج الصوت المترجم هنا
-        
-        # حفظ الفيديو الناتج في المسار النهائي المطلوب
-        final_clip.write_videofile(output_file_path, codec="libx264", audio_codec="aac")
-        
-        # إغلاق الملفات لتحرير الذاكرة
-        clip.close()
+        # حالياً نقوم بنسخ الملف المرفوع كنموذج تجريبي للتأكد من نجاح المسار
+        shutil.copy(input_file_path, output_file_path)
 
-        print(f"--- تم الانتهاء من دبلجة الفيديو بنجاح وحفظه في: {output_file_path} ---")
+        print(f"--- تم الانتهاء من المعالجة بنجاح وحفظه في: {output_file_path} ---")
 
     except Exception as e:
-        # تسجيل أي خطأ مفصل في الـ Logs بدلاً من التوقف بصمت
         print(f"❌ حدث خطأ أثناء معالجة الفيديو في الخلفية: {str(e)}")
         print(traceback.format_exc())
 
@@ -61,7 +48,7 @@ async def dub_video(
     with open(input_file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # تشغيل الدبلجة في الخلفية لتجنب حدوث Timeout
+    # تشغيل المهمة في الخلفية
     background_tasks.add_task(
         background_dubbing_task,
         input_file_path,
@@ -71,14 +58,14 @@ async def dub_video(
     )
 
     return {
-        "message": "Video is processing in the background.",
+        "message": "Video is processing in the background safely.",
         "filename": output_filename,
         "download_url": f"/download/{output_filename}"
     }
 
 
 # ==========================================
-# نقطة النهاية (API) لتحميل الفيديو بعد انتهائه
+# نقطة النهاية (API) لتحميل الفيديو
 # ==========================================
 @app.get("/download/{filename}")
 async def download_file(filename: str):
